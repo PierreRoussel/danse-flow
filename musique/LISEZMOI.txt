@@ -1,0 +1,18 @@
+Déposez ici les MP3 (ou MP4) de la soirée, puis rechargez Le Bal.
+
+Dès qu’un fichier est reconnu, YouTube s’arrête et le lecteur joue ce fichier.
+
+Noms qui marchent :
+  Ordinary.mp3
+  Alex Warren - Ordinary.mp3
+  01 Ordinary.mp3
+  u2ah9tWTkmk.mp3
+
+Pour forcer une association, créez correspondances.json :
+
+{
+  "ordinary": "mon-fichier-ordinary.mp3",
+  "connemara": "Sardou Connemara.mp3"
+}
+
+Les identifiants sont ceux de la setlist (ordinary, september, alors-on-danse, …).
