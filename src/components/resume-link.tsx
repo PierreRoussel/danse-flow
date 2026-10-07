@@ -4,9 +4,10 @@ import { useSyncExternalStore } from "react"
 
 import { buttonVariants } from "@/components/ui/button"
 import { TRACKS, trackHref } from "@/lib/playlist"
+import { resumeStorageKey } from "@/lib/playlists"
 import { cn } from "@/lib/utils"
 
-const STORAGE_KEY = "le-bal-track"
+const STORAGE_KEY = resumeStorageKey("bal")
 
 function subscribe(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange)

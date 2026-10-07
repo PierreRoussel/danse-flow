@@ -2,26 +2,38 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 
 import { isMediaFilename, matchMediaFiles, type MediaLibrary } from "@/lib/media"
+import { getPlaylist, type PlaylistSlug } from "@/lib/playlists"
+import { TRACKS } from "@/lib/playlist"
 
 export function mediaDir() {
   return process.env.LE_BAL_MEDIA_DIR || path.join(process.cwd(), "musique")
 }
 
-async function listFiles(dir: string): Promise<string[]> {
+async function listFilesInDir(dir: string, prefix = ""): Promise<string[]> {
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true })
     const names: string[] = []
     for (const entry of entries) {
       if (entry.name.startsWith(".")) continue
-      const full = path.join(dir, entry.name)
-      if (entry.isDirectory()) {
-        const nested = await fs.readdir(full, { withFileTypes: true })
-        for (const child of nested) {
-          if (child.isFile() && isMediaFilename(child.name)) {
-            names.push(`${entry.name}/${child.name}`)
-          }
-        }
-      } else if (entry.isFile() && isMediaFilename(entry.name)) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+      if (entry.isFile() && isMediaFilename(entry.name)) {
+        names.push(rel)
+      }
+    }
+    return names
+  } catch {
+    return []
+  }
+}
+
+/** Fichiers à la racine de musique/ (Le Bal), sans sous-dossiers des autres playlists. */
+async function listBalRootFiles(dir: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    const names: string[] = []
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue
+      if (entry.isFile() && isMediaFilename(entry.name)) {
         names.push(entry.name)
       }
     }
@@ -41,12 +53,33 @@ async function readOverrides(dir: string) {
   }
 }
 
+export async function scanMediaForPlaylist(slug: PlaylistSlug = "bal"): Promise<MediaLibrary> {
+  const playlist = getPlaylist(slug)
+  const tracks = playlist?.tracks ?? TRACKS
+  const root = mediaDir()
+  await fs.mkdir(root, { recursive: true })
+
+  const scanDir =
+    playlist && playlist.mediaSubdir
+      ? path.join(root, playlist.mediaSubdir)
+      : root
+
+  if (playlist?.mediaSubdir) {
+    await fs.mkdir(scanDir, { recursive: true })
+  }
+
+  const files =
+    playlist && playlist.mediaSubdir
+      ? await listFilesInDir(scanDir, playlist.mediaSubdir)
+      : await listBalRootFiles(root)
+
+  const overrides = await readOverrides(scanDir)
+  return matchMediaFiles(files, tracks, overrides)
+}
+
+/** @deprecated Préférez scanMediaForPlaylist("bal"). */
 export async function scanMedia(): Promise<MediaLibrary> {
-  const dir = mediaDir()
-  await fs.mkdir(dir, { recursive: true })
-  const files = await listFiles(dir)
-  const overrides = await readOverrides(dir)
-  return matchMediaFiles(files, overrides)
+  return scanMediaForPlaylist("bal")
 }
 
 const MIME: Record<string, string> = {

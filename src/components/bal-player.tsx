@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,12 +14,12 @@ import {
 } from "lucide-react"
 
 import { EnergyCurve } from "@/components/energy-curve"
-import { LocalPlayer } from "@/components/local-player"
+import { LocalPlayer, PauseLocalMedia } from "@/components/local-player"
 import { PlayerEffects } from "@/components/player-effects"
 import { ResumeLink } from "@/components/resume-link"
-import { YoutubeEmbed } from "@/components/youtube-embed"
 import { YoutubeExportButton, PLAYLIST_FILE_HREF } from "@/components/youtube-export"
 import { mediaByTrackId, type MediaLibrary } from "@/lib/media"
+import { startTrackMedia } from "@/lib/shared-media"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import {
@@ -54,6 +55,12 @@ export function BalLanding({ library }: { library: MediaLibrary }) {
     <div className="relative min-h-full overflow-hidden bg-background">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_oklch(0.34_0.07_42)_0%,_transparent_52%)]" />
       <main className="relative mx-auto flex min-h-full max-w-5xl flex-col justify-center gap-10 px-5 py-12 sm:px-8">
+        <Link
+          href="/"
+          className="text-sm text-muted-foreground hover:text-foreground w-fit"
+        >
+          ← Toutes les playlists
+        </Link>
         <div className="space-y-4">
           <p className="text-[0.75rem] tracking-[0.32em] text-primary uppercase">
             Après le vin d’honneur et le repas
@@ -63,9 +70,8 @@ export function BalLanding({ library }: { library: MediaLibrary }) {
           </h1>
           <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             Vous ouvrez le bal avec votre femme. Déposez les MP3 dans le dossier{" "}
-            <span className="text-foreground">musique/</span> : YouTube s’arrête et le
-            lecteur joue vos fichiers. Quarante-trois titres, Connemara seulement quand
-            c’est mérité.
+            <span className="text-foreground">musique/</span> : le lecteur ne joue que vos
+            fichiers locaux. Quarante-trois titres, Connemara seulement quand c’est mérité.
           </p>
         </div>
 
@@ -154,6 +160,7 @@ export function BalPlayer({
   index: number
   library: MediaLibrary
 }) {
+  const router = useRouter()
   const track = TRACKS[index]
   const phase = phaseById(track.phase)
   const nextTracks = TRACKS.slice(index + 1, index + 4)
@@ -162,8 +169,19 @@ export function BalPlayer({
   const nextHref = index < TRACKS.length - 1 ? trackHref(index + 1) : null
   const mediaMap = mediaByTrackId(library)
   const local = mediaMap[track.id]
-  const hasAnyLocal = library.matched.length > 0
+  const nextMedia = nextHref ? mediaMap[TRACKS[index + 1].id] : undefined
   const matchedIds = library.matched.map((item) => item.trackId)
+
+  function cue(nextIndex: number) {
+    const clamped = Math.min(Math.max(nextIndex, 0), TRACKS.length - 1)
+    void startTrackMedia(mediaMap[TRACKS[clamped].id])
+  }
+
+  function goTo(nextIndex: number) {
+    cue(nextIndex)
+    const clamped = Math.min(Math.max(nextIndex, 0), TRACKS.length - 1)
+    router.push(trackHref(clamped), { scroll: false })
+  }
 
   return (
     <div className="min-h-full bg-background text-foreground print:hidden">
@@ -175,7 +193,7 @@ export function BalPlayer({
               Soirée de mariage
             </p>
             <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-              <Link href="/" className="hover:text-primary">
+              <Link href="/bal/accueil" className="hover:text-primary">
                 Le Bal
               </Link>
             </h1>
@@ -191,36 +209,32 @@ export function BalPlayer({
               <FolderOpen />
               MP3 · {library.matched.length}/{TRACKS.length}
             </a>
+            <Link href="/" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              Playlists
+            </Link>
             <PlayerEffects
+              slug="bal"
               index={index}
-              nextHref={nextHref}
-              prevHref={prevHref}
+              tracks={TRACKS}
+              onNext={nextHref ? () => goTo(index + 1) : undefined}
+              onPrev={prevHref ? () => goTo(index - 1) : undefined}
             />
           </div>
         </header>
 
         <p className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3 text-sm leading-relaxed">
-          {hasAnyLocal ? (
-            local ? (
-              <>
-                Lecture MP3 : <span className="font-medium text-primary">{local.filename}</span>
-                . YouTube est coupé sur ce titre.
-              </>
-            ) : (
-              <>
-                Pas de MP3 pour ce titre. Ajoutez-le dans{" "}
-                <span className="text-foreground">musique/</span> ou ouvrez{" "}
-                <a href="/mp3" className="font-medium text-primary underline-offset-2 hover:underline">
-                  la liste des fichiers
-                </a>
-                .
-              </>
-            )
+          {local ? (
+            <>
+              Lecture MP3 : <span className="font-medium text-primary">{local.filename}</span>
+            </>
           ) : (
             <>
-              Aucun MP3 pour l’instant. Déposez les fichiers dans{" "}
-              <span className="text-foreground">musique/</span>, puis rechargez. En attendant,
-              le lecteur YouTube reste actif.
+              MP3 manquant pour ce titre. Ajoutez-le dans{" "}
+              <span className="text-foreground">musique/</span> ou consultez{" "}
+              <a href="/mp3" className="font-medium text-primary underline-offset-2 hover:underline">
+                la liste des fichiers
+              </a>
+              .
             </>
           )}
         </p>
@@ -231,9 +245,11 @@ export function BalPlayer({
           {PHASES.map((item) => {
             const active = item.id === track.phase
             return (
-              <a
+              <Link
                 key={item.id}
                 href={trackHref(firstIndexOfPhase(item.id))}
+                scroll={false}
+                onClick={() => cue(firstIndexOfPhase(item.id))}
                 className={cn(
                   "shrink-0 rounded-full border px-3 py-1.5 text-left text-xs transition-colors",
                   active
@@ -243,21 +259,25 @@ export function BalPlayer({
               >
                 <span className="block font-medium">{item.label}</span>
                 <span className="opacity-80">{item.clock}</span>
-              </a>
+              </Link>
             )
           })}
         </div>
 
         <div className="flex flex-wrap gap-2">
           {RESCUES.map((rescue) => (
-            <a
+            <Link
               key={rescue.trackId}
               href={trackHrefById(rescue.trackId)}
+              scroll={false}
+              onClick={() =>
+                cue(TRACKS.findIndex((item) => item.id === rescue.trackId))
+              }
               className={buttonVariants({ variant: "secondary", size: "sm" })}
             >
               {rescue.label}
               <span className="text-muted-foreground">· {rescue.hint}</span>
-            </a>
+            </Link>
           ))}
         </div>
 
@@ -269,15 +289,13 @@ export function BalPlayer({
                 suppressHydrationWarning
               >
                 {local ? (
-                  <LocalPlayer track={track} media={local} nextHref={nextHref} />
-                ) : hasAnyLocal ? (
-                  <MissingEmbed track={track} missingFile />
-                ) : track.youtubeId ? (
-                  <YoutubeEmbed
-                    videoId={track.youtubeId}
-                    title={`${track.title} — ${track.artist}`}
-                    index={index}
-                    nextHref={nextHref}
+                  <LocalPlayer
+                    track={track}
+                    media={local}
+                    nextMedia={nextMedia}
+                    onAdvance={() => {
+                      if (nextHref) goTo(index + 1)
+                    }}
                   />
                 ) : (
                   <MissingEmbed track={track} />
@@ -307,10 +325,15 @@ export function BalPlayer({
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {prevHref ? (
-                    <a href={prevHref} className={buttonVariants({ size: "lg" })}>
+                    <Link
+                      href={prevHref}
+                      scroll={false}
+                      onClick={() => cue(index - 1)}
+                      className={buttonVariants({ size: "lg" })}
+                    >
                       <ChevronLeft />
                       Précédent
-                    </a>
+                    </Link>
                   ) : (
                     <span
                       className={cn(
@@ -323,10 +346,15 @@ export function BalPlayer({
                     </span>
                   )}
                   {nextHref ? (
-                    <a href={nextHref} className={buttonVariants({ size: "lg" })}>
+                    <Link
+                      href={nextHref}
+                      scroll={false}
+                      onClick={() => cue(index + 1)}
+                      className={buttonVariants({ size: "lg" })}
+                    >
                       Suivant
                       <ChevronRight />
-                    </a>
+                    </Link>
                   ) : (
                     <span
                       className={cn(
@@ -371,9 +399,11 @@ export function BalPlayer({
             {nextTracks.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
                 {nextTracks.map((item, offset) => (
-                  <a
+                  <Link
                     key={item.id}
                     href={trackHref(index + offset + 1)}
+                    scroll={false}
+                    onClick={() => cue(index + offset + 1)}
                     className="rounded-2xl border border-border/70 bg-card/50 p-4 text-left transition-colors hover:border-primary/40"
                   >
                     <p className="text-[0.65rem] tracking-[0.18em] text-primary/80 uppercase">
@@ -381,7 +411,7 @@ export function BalPlayer({
                     </p>
                     <p className="font-heading mt-1 text-lg leading-tight">{item.title}</p>
                     <p className="text-sm text-muted-foreground">{item.artist}</p>
-                  </a>
+                  </Link>
                 ))}
               </div>
             ) : (
@@ -393,7 +423,7 @@ export function BalPlayer({
           </section>
 
           <aside className="hidden lg:block">
-            <TrackList index={index} matchedIds={matchedIds} />
+            <TrackList index={index} matchedIds={matchedIds} onCue={cue} />
           </aside>
         </div>
 
@@ -404,6 +434,7 @@ export function BalPlayer({
           <TrackList
             index={index}
             matchedIds={matchedIds}
+            onCue={cue}
             className="mt-0 h-auto max-h-[70vh] border-0"
           />
         </details>
@@ -416,10 +447,12 @@ export function BalPlayer({
 function TrackList({
   index,
   matchedIds,
+  onCue,
   className,
 }: {
   index: number
   matchedIds: string[]
+  onCue: (index: number) => void
   className?: string
 }) {
   return (
@@ -446,6 +479,7 @@ function TrackList({
                   number={trackIndex + 1}
                   active={trackIndex === index}
                   href={trackHref(trackIndex)}
+                  onCue={() => onCue(trackIndex)}
                   local={matchedIds.includes(track.id)}
                 />
               ))}
@@ -462,18 +496,22 @@ function TrackRow({
   number,
   active,
   href,
+  onCue,
   local,
 }: {
   track: Track
   number: number
   active: boolean
   href: string
+  onCue: () => void
   local: boolean
 }) {
   const thumb = thumbnailUrl(track)
   return (
-    <a
+    <Link
       href={href}
+      scroll={false}
+      onClick={onCue}
       className={cn(
         "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
         active ? "bg-primary/15" : "hover:bg-muted/60"
@@ -504,28 +542,23 @@ function TrackRow({
       >
         {local ? "MP3" : formatClock(track.durationSec)}
       </span>
-    </a>
+    </Link>
   )
 }
 
-function MissingEmbed({
-  track,
-  missingFile = false,
-}: {
-  track: Track
-  missingFile?: boolean
-}) {
+function MissingEmbed({ track }: { track: Track }) {
   return (
     <div className="flex size-full flex-col items-center justify-center gap-4 bg-[linear-gradient(160deg,oklch(0.22_0.04_40),oklch(0.14_0.02_30))] p-6 text-center">
+      <PauseLocalMedia />
       <PauseCircle className="size-12 text-primary" />
       <div>
         <p className="font-heading text-2xl">{track.title}</p>
         <p className="text-muted-foreground">{track.artist}</p>
       </div>
       <p className="max-w-sm text-sm text-muted-foreground">
-        {missingFile
-          ? "Pas de MP3 pour ce titre : YouTube ne se lance pas. Ajoutez le fichier dans musique/, ou ouvrez YouTube Music en secours."
-          : "Lancez ce titre dans YouTube Music, puis revenez ici pour enchaîner."}
+        Aucun fichier local pour ce titre. Déposez un MP3 dans{" "}
+        <code className="text-foreground">musique/</code>, rechargez la page, ou passez au
+        morceau suivant.
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         <a

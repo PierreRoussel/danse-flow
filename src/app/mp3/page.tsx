@@ -2,15 +2,33 @@ import Link from "next/link"
 import { ArrowLeft, FolderOpen } from "lucide-react"
 
 import { buttonVariants } from "@/components/ui/button"
-import { scanMedia } from "@/lib/media-server"
-import { TRACKS, trackHrefById } from "@/lib/playlist"
+import { scanMediaForPlaylist } from "@/lib/media-server"
+import {
+  getPlaylist,
+  isPlaylistSlug,
+  playlistPlayerHref,
+  trackHrefForPlaylist,
+  type PlaylistSlug,
+} from "@/lib/playlists"
 import { cn } from "@/lib/utils"
 
 export const dynamic = "force-dynamic"
 
-export default async function Mp3Page() {
-  const library = await scanMedia()
+export default async function Mp3Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ playlist?: string }>
+}) {
+  const { playlist: playlistParam } = await searchParams
+  const slug: PlaylistSlug =
+    playlistParam && isPlaylistSlug(playlistParam) ? playlistParam : "bal"
+  const playlist = getPlaylist(slug)!
+  const library = await scanMediaForPlaylist(slug)
   const byId = Object.fromEntries(library.matched.map((item) => [item.trackId, item]))
+  const mediaHint =
+    slug === "bal"
+      ? "musique/"
+      : `musique/${playlist.mediaSubdir}/`
 
   return (
     <div className="relative min-h-full overflow-hidden bg-background">
@@ -22,42 +40,43 @@ export default async function Mp3Page() {
             className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Retour au bal
+            Playlists
           </Link>
           <p className="text-[0.75rem] tracking-[0.32em] text-primary uppercase">
-            Dossier musique
+            Dossier musique · {playlist.title}
           </p>
           <h1 className="font-heading mt-2 text-4xl leading-tight font-semibold tracking-tight sm:text-5xl">
-            Les MP3 de la soirée
+            Les MP3
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            Déposez vos fichiers dans le dossier <code className="text-foreground">musique/</code>{" "}
-            à la racine du projet, puis rechargez. Le lecteur coupe YouTube dès qu’un
-            fichier est reconnu.
+            Déposez vos fichiers dans <code className="text-foreground">{mediaHint}</code>{" "}
+            à la racine du projet, puis rechargez. Lecture locale uniquement — pas de
+            lecteur YouTube intégré.
           </p>
         </div>
 
         <div className="rounded-2xl border border-primary/30 bg-primary/10 p-5">
           <p className="flex items-center gap-2 font-medium text-primary">
             <FolderOpen className="size-4" />
-            {library.matched.length} / {TRACKS.length} titres trouvés
+            {library.matched.length} / {playlist.tracks.length} titres trouvés
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Noms qui marchent bien : <em>Ordinary.mp3</em>,{" "}
-            <em>Alex Warren - Ordinary.mp3</em>, <em>01 Ordinary.mp3</em>, ou l’id YouTube{" "}
-            <em>u2ah9tWTkmk.mp3</em>. En cas de doute, un fichier{" "}
-            <code className="text-foreground">musique/correspondances.json</code> force
-            l’association.
+            Noms qui marchent bien : titre seul, <em>Artiste - Titre.mp3</em>, ou un numéro
+            d’ordre. Fichier <code className="text-foreground">correspondances.json</code>{" "}
+            dans le même dossier pour forcer une association.
           </p>
-          <Link href="/bal" className={cn(buttonVariants({ size: "lg" }), "mt-4")}>
-            Ouvrir le bal
+          <Link
+            href={playlistPlayerHref(slug, playlist.tracks[0]?.id)}
+            className={cn(buttonVariants({ size: "lg" }), "mt-4")}
+          >
+            Ouvrir {playlist.title}
           </Link>
         </div>
 
         <section>
           <h2 className="font-heading text-2xl">Correspondances</h2>
           <ol className="mt-3 divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card/40">
-            {TRACKS.map((track, index) => {
+            {playlist.tracks.map((track, index) => {
               const hit = byId[track.id]
               return (
                 <li key={track.id} className="flex items-baseline gap-3 px-4 py-3 text-sm">
@@ -65,7 +84,10 @@ export default async function Mp3Page() {
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <a href={trackHrefById(track.id)} className="font-medium hover:text-primary">
+                    <a
+                      href={trackHrefForPlaylist(slug, index)}
+                      className="font-medium hover:text-primary"
+                    >
                       {track.title}
                     </a>
                     <span className="text-muted-foreground"> — {track.artist}</span>
@@ -98,6 +120,14 @@ export default async function Mp3Page() {
               ))}
             </ul>
           </section>
+        ) : null}
+
+        {slug !== "bal" ? (
+          <p className="text-xs text-muted-foreground">
+            <Link href="/mp3" className="text-primary hover:underline">
+              Voir les MP3 du bal
+            </Link>
+          </p>
         ) : null}
       </main>
     </div>

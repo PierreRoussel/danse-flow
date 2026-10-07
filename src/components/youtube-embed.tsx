@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 
 import { youtubeEmbedUrl } from "@/lib/playlist"
+import { pauseSharedMedia } from "@/lib/shared-media"
 
 let apiPromise: Promise<void> | null = null
 
@@ -33,14 +34,23 @@ export function YoutubeEmbed({
   videoId,
   title,
   index,
-  nextHref,
+  onEnded,
 }: {
   videoId: string
   title: string
   index: number
-  nextHref: string | null
+  onEnded?: () => void
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const onEndedRef = useRef(onEnded)
+
+  useEffect(() => {
+    onEndedRef.current = onEnded
+  })
+
+  useEffect(() => {
+    pauseSharedMedia()
+  }, [videoId])
 
   useEffect(() => {
     const host = hostRef.current
@@ -59,15 +69,15 @@ export function YoutubeEmbed({
     let cancelled = false
 
     async function attach() {
-      if (!nextHref) return
+      if (!onEndedRef.current) return
       await loadYoutubeApi()
       if (cancelled || !window.YT?.Player) return
       if (!document.getElementById("le-bal-yt")) return
       new window.YT.Player("le-bal-yt", {
         events: {
           onStateChange: (event) => {
-            if (event.data === window.YT?.PlayerState.ENDED && nextHref) {
-              window.location.assign(nextHref)
+            if (event.data === window.YT?.PlayerState.ENDED) {
+              onEndedRef.current?.()
             }
           },
         },
@@ -80,7 +90,7 @@ export function YoutubeEmbed({
       cancelled = true
       host.replaceChildren()
     }
-  }, [videoId, title, index, nextHref])
+  }, [videoId, title, index])
 
   return (
     <div

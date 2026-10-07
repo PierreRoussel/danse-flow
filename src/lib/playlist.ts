@@ -37,7 +37,7 @@ export const YOUTUBE_PLAYLIST_URL = `https://www.youtube.com/playlist?list=${YOU
 export const YOUTUBE_PLAYLIST_WATCH_URL = `https://www.youtube.com/watch?v=u2ah9tWTkmk&list=${YOUTUBE_PLAYLIST_ID}`
 export const YOUTUBE_MUSIC_PLAYLIST_URL = `https://music.youtube.com/playlist?list=${YOUTUBE_PLAYLIST_ID}`
 
-export function youtubeWatchUrl(track: Track) {
+export function youtubeWatchUrl(track: Pick<Track, "title" | "artist" | "youtubeId">) {
   if (track.youtubeId) {
     return `https://www.youtube.com/watch?v=${track.youtubeId}&list=${YOUTUBE_PLAYLIST_ID}`
   }
@@ -46,7 +46,7 @@ export function youtubeWatchUrl(track: Track) {
   )}`
 }
 
-export function youtubeMusicWatchUrl(track: Track) {
+export function youtubeMusicWatchUrl(track: Pick<Track, "title" | "artist" | "youtubeId">) {
   if (track.youtubeId) {
     return `https://music.youtube.com/watch?v=${track.youtubeId}&list=${YOUTUBE_PLAYLIST_ID}`
   }
@@ -55,7 +55,7 @@ export function youtubeMusicWatchUrl(track: Track) {
   )}`
 }
 
-export function spotifySearchUrl(track: Track) {
+export function spotifySearchUrl(track: Pick<Track, "title" | "artist">) {
   return `https://open.spotify.com/search/${encodeURIComponent(
     `${track.title} ${track.artist}`
   )}`
@@ -87,7 +87,7 @@ export const TUNEMYMUSIC_YOUTUBE_URL =
 export const TUNEMYMUSIC_YOUTUBE_MUSIC_URL =
   "https://www.tunemymusic.com/transfer/freetext-to-youtube-music"
 
-export function thumbnailUrl(track: Track) {
+export function thumbnailUrl(track: Pick<Track, "youtubeId">) {
   if (!track.youtubeId) return null
   return `https://i.ytimg.com/vi/${track.youtubeId}/hqdefault.jpg`
 }

@@ -1,4 +1,4 @@
-import { TRACKS, type Track } from "@/lib/playlist"
+import type { MatchableTrack } from "@/lib/playlists"
 
 export const MEDIA_EXTENSIONS = [
   "mp3",
@@ -90,7 +90,11 @@ const ALIASES: Record<string, string[]> = {
   "dont-start-now": ["dont start now"],
 }
 
-function scoreFileAgainstTrack(filename: string, track: Track, trackIndex: number) {
+function scoreFileAgainstTrack(
+  filename: string,
+  track: MatchableTrack,
+  trackIndex: number
+) {
   const base = filename.replace(/\.[^.]+$/, "")
   const folded = foldText(base)
   const fileTokens = new Set(tokens(base))
@@ -121,6 +125,7 @@ function scoreFileAgainstTrack(filename: string, track: Track, trackIndex: numbe
 
 export function matchMediaFiles(
   filenames: string[],
+  tracks: readonly MatchableTrack[],
   overrides: Record<string, string> = {}
 ): MediaLibrary {
   const files = filenames.filter(isMediaFilename)
@@ -128,7 +133,7 @@ export function matchMediaFiles(
   const byTrack = new Map<string, TrackMedia>()
 
   for (const [trackId, filename] of Object.entries(overrides)) {
-    if (!files.includes(filename) || !TRACKS.some((track) => track.id === trackId)) continue
+    if (!files.includes(filename) || !tracks.some((track) => track.id === trackId)) continue
     usedFiles.add(filename)
     byTrack.set(trackId, {
       trackId,
@@ -142,7 +147,7 @@ export function matchMediaFiles(
   const pairs: { filename: string; trackId: string; score: number }[] = []
   for (const filename of files) {
     if (usedFiles.has(filename)) continue
-    TRACKS.forEach((track, index) => {
+    tracks.forEach((track, index) => {
       if (byTrack.has(track.id)) return
       const score = scoreFileAgainstTrack(filename, track, index)
       if (score >= 58) pairs.push({ filename, trackId: track.id, score })
@@ -162,10 +167,10 @@ export function matchMediaFiles(
     })
   }
 
-  const matched = TRACKS.map((track) => byTrack.get(track.id)).filter(
-    (item): item is TrackMedia => Boolean(item)
-  )
-  const missing = TRACKS.filter((track) => !byTrack.has(track.id)).map((track) => ({
+  const matched = tracks
+    .map((track) => byTrack.get(track.id))
+    .filter((item): item is TrackMedia => Boolean(item))
+  const missing = tracks.filter((track) => !byTrack.has(track.id)).map((track) => ({
     id: track.id,
     title: track.title,
     artist: track.artist,

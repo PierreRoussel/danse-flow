@@ -1,36 +1,107 @@
 "use client"
 
-import { thumbnailUrl, type Track } from "@/lib/playlist"
+import { useEffect, useLayoutEffect, useRef } from "react"
+
+import { thumbnailUrl } from "@/lib/playlist"
+import type { MatchableTrack } from "@/lib/playlists"
 import type { TrackMedia } from "@/lib/media"
+import {
+  getSharedAudio,
+  getSharedVideo,
+  pauseSharedMedia,
+  startTrackMedia,
+} from "@/lib/shared-media"
+
+export function PauseLocalMedia() {
+  useEffect(() => {
+    pauseSharedMedia()
+  }, [])
+  return null
+}
 
 export function LocalPlayer({
   track,
   media,
-  nextHref,
+  nextMedia,
+  startAtSec = 0,
+  nextStartAtSec = 0,
+  onAdvance,
 }: {
-  track: Track
+  track: MatchableTrack & { title: string; artist: string }
   media: TrackMedia
-  nextHref: string | null
+  nextMedia: TrackMedia | undefined
+  startAtSec?: number
+  nextStartAtSec?: number
+  onAdvance: () => void
 }) {
-  const cover = thumbnailUrl(track)
+  const hostRef = useRef<HTMLDivElement>(null)
+  const mediaRef = useRef(media)
+  const startAtRef = useRef(startAtSec)
+  const nextStartAtRef = useRef(nextStartAtSec)
+  const onAdvanceRef = useRef(onAdvance)
+  const nextMediaRef = useRef(nextMedia)
+  mediaRef.current = media
+  startAtRef.current = startAtSec
+  nextStartAtRef.current = nextStartAtSec
+  onAdvanceRef.current = onAdvance
+  nextMediaRef.current = nextMedia
 
-  function onEnded() {
-    if (nextHref) window.location.assign(nextHref)
-  }
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+
+    const el = media.kind === "video" ? getSharedVideo() : getSharedAudio()
+    if (el.parentNode !== host) host.appendChild(el)
+    void startTrackMedia(mediaRef.current, {
+      startAtSec: startAtRef.current,
+      forceRestart: true,
+    })
+
+    function onEnded() {
+      // Start the next file in the same media element (keeps autoplay unlocked),
+      // then update the route/UI.
+      void startTrackMedia(nextMediaRef.current, {
+        startAtSec: nextStartAtRef.current,
+        forceRestart: true,
+      })
+      onAdvanceRef.current()
+    }
+
+    function onTimeUpdate() {
+      const floor = startAtRef.current
+      if (floor > 0 && el.currentTime < floor - 0.35) {
+        el.currentTime = floor
+      }
+    }
+
+    el.addEventListener("ended", onEnded)
+    el.addEventListener("timeupdate", onTimeUpdate)
+    return () => {
+      el.removeEventListener("ended", onEnded)
+      el.removeEventListener("timeupdate", onTimeUpdate)
+    }
+  }, [media.kind, media.url, startAtSec])
+
+  useEffect(() => {
+    const host = hostRef.current
+    const kind = media.kind
+    return () => {
+      const el = kind === "video" ? getSharedVideo() : getSharedAudio()
+      if (host && el.parentNode === host) host.removeChild(el)
+    }
+  }, [media.kind])
 
   if (media.kind === "video") {
     return (
-      <video
-        key={media.url}
-        className="absolute inset-0 size-full bg-black object-contain"
-        src={media.url}
-        autoPlay
-        controls
-        playsInline
-        onEnded={onEnded}
+      <div
+        ref={hostRef}
+        className="absolute inset-0 size-full bg-black"
+        suppressHydrationWarning
       />
     )
   }
+
+  const cover = thumbnailUrl(track)
 
   return (
     <div className="absolute inset-0 flex flex-col bg-[linear-gradient(160deg,oklch(0.22_0.04_40),oklch(0.14_0.02_30))]">
@@ -56,14 +127,7 @@ export function LocalPlayer({
         </div>
       </div>
       <div className="bg-black/80 px-4 py-3">
-        <audio
-          key={media.url}
-          className="w-full"
-          src={media.url}
-          autoPlay
-          controls
-          onEnded={onEnded}
-        />
+        <div ref={hostRef} suppressHydrationWarning />
       </div>
     </div>
   )

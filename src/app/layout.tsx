@@ -15,9 +15,9 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "Le Bal — playlist de soirée de mariage",
+  title: "Le Bal — pupitre multi-playlists",
   description:
-    "Pupitre de bal : votre playlist YouTube Music Mariage (soirée), hors ligne via Premium, consignes et boutons d’urgence.",
+    "Playlists de mariage et d’événement : lecture MP3 locale, pupitre Le Bal avec consignes, playlists simplifiées Repas, Blind test et Baseball.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
